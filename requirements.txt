@@ -1,0 +1,11 @@
+pandas>=2.0
+numpy>=1.24
+scipy>=1.10
+scikit-learn>=1.3   # reserved: not used by the descriptive engine (see README, "On ML")
+duckdb>=0.10
+pyarrow>=14
+plotly>=5.18
+streamlit>=1.36
+reportlab>=4.0
+matplotlib>=3.7     # static charts inside the PDF (Plotly static export needs a browser)
+pytest>=7.4
