@@ -151,7 +151,7 @@ High-pressure deliveries are identified using the top 25% of pressure scores wit
 
 ### 4.3 Performance Evaluation
 
-`evaluate.py` calculates player performance relative to league expectations in comparable format, innings-phase, and pressure-level conditions.
+`evaluate.py` calculates player performance relative to peer expectations in comparable format, innings-phase, and pressure-level conditions. A player's own outcomes are excluded from their reference rates; when a context has no peer observations, the comparison widens to phase and then format. If the format has no other player observations, the full-format rate is used as a last resort.
 
 **Batting metrics:**
 - Pressure strike rate.

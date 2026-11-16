@@ -3,9 +3,9 @@
 Per-delivery value over expectation (VOE), in runs:
   batter : (runs - E[runs]) - (dismissed - E[dismissed]) * wicket_value
   bowler : -(runs_charged - E[runs]) + (credited_wicket - E[wicket]) * wicket_value
-E[.] is the league rate for the same (format, innings phase, pressure level) cell, so a player is
-compared with everybody else facing the same situation -- format and phase are controlled for, and
-nobody is rewarded for playing more matches (all ratings are per-ball and shrunk by sample size).
+E[.] is the leave-one-player-out peer rate for the same (format, innings phase, pressure level) cell,
+widened to phase and format when necessary. Nobody is rewarded for playing more matches (all ratings
+are per-ball and shrunk by sample size).
 """
 import numpy as np
 import pandas as pd
@@ -14,6 +14,47 @@ from .pressure import pressure_score, assign_levels
 from .reliability import rate_group
 
 KEYS = ["format", "phase", "level"]
+
+
+def _leave_one_player_out_expectations(d):
+    """Estimate context rates from peers, widening context when a peer cell is empty."""
+    expected_runs = pd.Series(np.nan, index=d.index, dtype=float)
+    expected_wickets = pd.Series(np.nan, index=d.index, dtype=float)
+    contexts = [KEYS, ["format", "phase"], ["format"]]
+
+    for keys in contexts:
+        totals = d.groupby(keys, observed=True).agg(
+            _total_runs=("val_runs", "sum"),
+            _total_wickets=("wkt", "sum"),
+            _total_units=("unit", "sum"),
+        )
+        player_totals = d.groupby(["player"] + keys, observed=True).agg(
+            _player_runs=("val_runs", "sum"),
+            _player_wickets=("wkt", "sum"),
+            _player_units=("unit", "sum"),
+        )
+        refs = d.join(totals, on=keys).join(player_totals, on=["player"] + keys)
+        peer_units = refs["_total_units"] - refs["_player_units"]
+        use = expected_runs.isna() & (peer_units > 0)
+        expected_runs.loc[use] = (
+            (refs.loc[use, "_total_runs"] - refs.loc[use, "_player_runs"]) / peer_units[use]
+        )
+        expected_wickets.loc[use] = (
+            (refs.loc[use, "_total_wickets"] - refs.loc[use, "_player_wickets"]) / peer_units[use]
+        )
+
+    missing = expected_runs.isna()
+    if missing.any():
+        totals = d.groupby("format", observed=True).agg(
+            _total_runs=("val_runs", "sum"),
+            _total_wickets=("wkt", "sum"),
+            _total_units=("unit", "sum"),
+        )
+        refs = d.loc[missing, ["format"]].join(totals, on="format")
+        expected_runs.loc[missing] = refs["_total_runs"] / refs["_total_units"]
+        expected_wickets.loc[missing] = refs["_total_wickets"] / refs["_total_units"]
+
+    return expected_runs, expected_wickets
 
 
 def prepare_rows(states, side, cfg: Config, weights=None, q=None, naive=False):
@@ -36,9 +77,7 @@ def prepare_rows(states, side, cfg: Config, weights=None, q=None, naive=False):
         d["player"], d["team"] = d.bowler, d.get("bowling_team", "")
         d["unit"], d["val_runs"], d["wkt"] = d.legal.astype(float), d.bowler_runs, d.bowler_wicket.astype(float)
         d["bnd"], d["dot"] = d.runs_batter.isin([4, 6]), d.legal & (d.bowler_runs == 0)
-    cell = d.groupby(KEYS).agg(r=("val_runs", "sum"), w=("wkt", "sum"), u=("unit", "sum"))
-    cell = pd.DataFrame({"e_run": cell.r / cell.u, "e_wkt": cell.w / cell.u})
-    d = d.join(cell, on=KEYS)
+    d["e_run"], d["e_wkt"] = _leave_one_player_out_expectations(d)
     exp_r, exp_w = d.e_run * d.unit, d.e_wkt * d.unit
     if side == "bat":
         d["voe"] = (d.val_runs - exp_r) - (d.wkt - exp_w) * d.wicket_value

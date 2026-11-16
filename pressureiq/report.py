@@ -158,7 +158,9 @@ def build_report(states, base, sens, dq, cal, cfg, manifest, path):
     S += [Paragraph("Calibrated reference values", small), table(t, [2.5 * cm, 2 * cm, 1.5 * cm, 2 * cm, 9 * cm])]
     S += [Paragraph("4. Evaluation", H2), Paragraph(
         "Each delivery gets a value over expectation (VOE) in runs. Batter: (runs - E[runs]) - (dismissed - E[dismissed]) x "
-        "wicket value. Bowler: -(runs charged - E[runs]) + (credited wicket - E[wicket]) x wicket value. Wicket value is the "
+        "wicket value. Bowler: -(runs charged - E[runs]) + (credited wicket - E[wicket]) x wicket value. Reference rates "
+        "exclude the evaluated player; sparse format/phase/pressure cells widen to phase and then format, with the full-format "
+        "rate as a last resort if no peers exist. Wicket value is the "
         "calibrated drop in expected remaining runs. Descriptive columns (pressure SR/economy, boundary and dot %, "
         "dismissal rate, delta vs a phase-adjusted baseline) are exported for every player.", B)]
     S += [Paragraph("5. Reliability and rating", H2), Paragraph(

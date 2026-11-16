@@ -6,7 +6,7 @@ from pressureiq.config import Config
 from pressureiq.ingest import DataQuality, clean_ball_by_ball, clean_matches, map_players, SchemaError
 from pressureiq.state import build_states
 from pressureiq.pressure import fit_calibration, compute_components
-from pressureiq.evaluate import aggregate_side, prepare_rows, run_side
+from pressureiq.evaluate import aggregate_side, prepare_rows, run_side, _leave_one_player_out_expectations
 from pressureiq.reliability import eb_shrink
 from pressureiq.synth import generate
 
@@ -111,6 +111,52 @@ def test_shrinkage_pulls_small_samples_harder():
     post, sd, lam, mu, tau2 = eb_shrink(obs, se)
     assert lam[-2] < lam[-1]
     assert post[-2] < obs[-2] * 0.5 and abs(post[-1] - obs[-1]) < abs(post[-2] - obs[-2])
+
+
+def test_context_expectations_exclude_player_and_widen_sparse_context():
+    rows = pd.DataFrame({
+        "player": ["A", "A", "B"],
+        "format": ["T20", "T20", "T20"],
+        "phase": ["middle", "middle", "middle"],
+        "level": ["high", "high", "low"],
+        "unit": [1.0, 1.0, 1.0],
+        "val_runs": [10.0, 20.0, 4.0],
+        "wkt": [1.0, 0.0, 0.0],
+    })
+    expected_runs, expected_wickets = _leave_one_player_out_expectations(rows)
+    assert expected_runs.tolist() == [4.0, 4.0, 15.0]
+    assert expected_wickets.tolist() == [0.0, 0.0, 0.5]
+
+
+def test_context_expectations_do_not_shift_when_player_adds_own_deliveries():
+    rows = pd.DataFrame({
+        "player": ["A", "B"],
+        "format": ["T20", "T20"],
+        "phase": ["middle", "middle"],
+        "level": ["high", "high"],
+        "unit": [1.0, 1.0],
+        "val_runs": [10.0, 2.0],
+        "wkt": [1.0, 0.0],
+    })
+    before, _ = _leave_one_player_out_expectations(rows)
+    expanded = pd.concat([rows, rows.iloc[[0]]], ignore_index=True)
+    after, _ = _leave_one_player_out_expectations(expanded)
+    assert before.iloc[0] == after.iloc[0] == 2.0
+
+
+def test_context_expectations_use_full_format_only_without_any_peers():
+    rows = pd.DataFrame({
+        "player": ["A", "A"],
+        "format": ["T20", "T20"],
+        "phase": ["middle", "middle"],
+        "level": ["high", "high"],
+        "unit": [1.0, 1.0],
+        "val_runs": [10.0, 20.0],
+        "wkt": [1.0, 0.0],
+    })
+    expected_runs, expected_wickets = _leave_one_player_out_expectations(rows)
+    assert expected_runs.tolist() == [15.0, 15.0]
+    assert expected_wickets.tolist() == [0.5, 0.5]
 
 
 # ----------------------------------------------------------------------------- end-to-end on synthetic data
