@@ -267,7 +267,7 @@ NERV/
 ### Installation
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/unnkarm/NERV.git
 cd NERV
 
 pip install -r requirements.txt
